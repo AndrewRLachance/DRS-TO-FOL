@@ -1,6 +1,6 @@
 # DRS to FOL
 
-This project contains experimental Python utilities for parsing, representing, transforming, lifting, pretty-printing, and generating first-order logic formulas derived from DRS-style (Discourse Representation Structure) and PMB (Parallel Meaning Bank) SBN-style  (Sequence Box Notation) semantic representations.
+This project contains experimental Python utilities for parsing, representing, transforming, lifting, pretty-printing, and generating first-order logic formulas derived from DRS-style (Discourse Representation Structure) and PMB ([Parallel Meaning Bank](https://pmb.let.rug.nl/data.php)) SBN-style  (Sequence Box Notation) semantic representations.
 
 The project currently has two related areas of focus:
 
@@ -18,6 +18,8 @@ PMB drs.sbn
 → project-specific FOL AST
 → lifting / abstraction / pretty-printing
 ```
+
+The intent is to enable accurate, quick, [natural language understanding](https://en.wikipedia.org/wiki/Natural_language_understanding).
 
 ## Important Status Notice
 
