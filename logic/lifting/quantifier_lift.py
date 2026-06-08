@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .scoring import is_better_lift
+
 from ..fol_ast import (
     Atom,
     BiImplication,
@@ -69,7 +71,8 @@ def lift_quantifiers_once(formula: Formula) -> Formula:
       ¬∀x.P                       -> ∃x.¬P
     """
     if isinstance(formula, Negation) and isinstance(formula.body, Negation):
-        return formula.body.body
+        candidate = formula.body.body
+        return candidate if is_better_lift(formula, candidate) else formula
 
     if isinstance(formula, Negation) and isinstance(formula.body, Exists):
         exists = formula.body
@@ -84,22 +87,37 @@ def lift_quantifiers_once(formula: Formula) -> Formula:
                 neg = negated_parts[0]
                 premises = [part for part in parts if part is not neg]
                 if premises:
-                    return Forall(exists.vars, Implication(make_and(premises), neg.body))
+                    candidate = Forall(exists.vars, Implication(make_and(premises), neg.body))
+                    return candidate if is_better_lift(formula, candidate) else formula
 
-        return Forall(exists.vars, Negation(exists.body))
+        candidate = Forall(exists.vars, Negation(exists.body))
+        return candidate if is_better_lift(formula, candidate) else formula
 
     if isinstance(formula, Negation) and isinstance(formula.body, Forall):
         forall = formula.body
-        return Exists(forall.vars, Negation(forall.body))
+        candidate = Exists(forall.vars, Negation(forall.body))
+        return candidate if is_better_lift(formula, candidate) else formula
 
     return formula
 
 
 def lift_quantifiers(formula: Formula, max_steps: int = 100) -> Formula:
-    current = rewrite_children(formula)
+    current = formula
+
     for _ in range(max_steps):
-        nxt = lift_quantifiers_once(current)
-        if nxt == current:
+        # Try the current node before rewriting children. This preserves
+        # higher-value outer abstractions such as:
+        #   ¬∃x.(A(x) ∧ ¬∃e.B(e,x)) -> ∀x.(A(x) → ∃e.B(e,x))
+        # and prevents child rewrites from obscuring the parent pattern.
+        top = lift_quantifiers_once(current)
+        if top != current:
+            current = top
+            continue
+
+        child_rewritten = rewrite_children(current)
+        if child_rewritten == current:
             return current
-        current = rewrite_children(nxt)
+
+        current = child_rewritten
+
     raise RuntimeError("Quantifier lifting did not converge")

@@ -40,13 +40,13 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "input",
+        "--input",
         type=Path,
         help="Path to the input JSON file, e.g. gold-fol.json",
     )
 
     parser.add_argument(
-        "output",
+        "--output",
         type=Path,
         help="Path to the output JSON file, e.g. gold-fol-lifted.json",
     )

@@ -7,6 +7,8 @@ except ImportError as exc:  # pragma: no cover
         "matchpy is required for connective lifting. Install it with: pip install matchpy"
     ) from exc
 
+from .scoring import is_better_lift
+
 from ..fol_ast import (
     Atom,
     BiImplication,
@@ -19,13 +21,13 @@ from ..fol_ast import (
     Negation,
 )
 
-NOT = Operation.new("NOT", Arity.unary) # type: ignore
-AND = Operation.new("AND", Arity.polyadic, associative=True, commutative=True) # type: ignore
-OR = Operation.new("OR", Arity.polyadic, associative=True, commutative=True) # type: ignore
-IMPLIES = Operation.new("IMPLIES", Arity.binary) # type: ignore
-IFF = Operation.new("IFF", Arity.binary) # type: ignore
-EXISTS = Operation.new("EXISTS", Arity.binary) # type: ignore
-FORALL = Operation.new("FORALL", Arity.binary) # type: ignore
+NOT = Operation.new("NOT", Arity.unary)
+AND = Operation.new("AND", Arity.polyadic, associative=True, commutative=True)
+OR = Operation.new("OR", Arity.polyadic, associative=True, commutative=True)
+IMPLIES = Operation.new("IMPLIES", Arity.binary)
+IFF = Operation.new("IFF", Arity.binary)
+EXISTS = Operation.new("EXISTS", Arity.binary)
+FORALL = Operation.new("FORALL", Arity.binary)
 
 A_ = Wildcard.dot("A")
 B_ = Wildcard.dot("B")
@@ -42,9 +44,9 @@ def _make_and(parts):
 def _rewrite_rules():
     return [
         # Most specific first.
-        (Pattern(AND(IMPLIES(A_, B_), IMPLIES(B_, A_))), lambda s: IFF(s["A"], s["B"])), # type: ignore
-        (Pattern(OR(NOT(A_), B_)), lambda s: IMPLIES(s["A"], s["B"])), # type: ignore
-        (Pattern(NOT(NOT(P_))), lambda s: s["P"]), # type: ignore
+        (Pattern(AND(IMPLIES(A_, B_), IMPLIES(B_, A_))), lambda s: IFF(s["A"], s["B"])),
+        (Pattern(OR(NOT(A_), B_)), lambda s: IMPLIES(s["A"], s["B"])),
+        (Pattern(NOT(NOT(P_))), lambda s: s["P"]),
     ]
 
 
@@ -79,9 +81,9 @@ def to_matchpy(formula: Formula, enc: AtomEncoder):
     if isinstance(formula, Atom):
         return enc.encode(formula)
     if isinstance(formula, Negation):
-        return NOT(to_matchpy(formula.body, enc)) # type: ignore
+        return NOT(to_matchpy(formula.body, enc))
     if isinstance(formula, Conjunction):
-        return AND(*(to_matchpy(part, enc) for part in formula.parts)) # type: ignore
+        return AND(*(to_matchpy(part, enc) for part in formula.parts))
     if isinstance(formula, Disjunction):
         return OR(*(to_matchpy(part, enc) for part in formula.parts))
     if isinstance(formula, Implication):
@@ -89,9 +91,9 @@ def to_matchpy(formula: Formula, enc: AtomEncoder):
     if isinstance(formula, BiImplication):
         return IFF(to_matchpy(formula.left, enc), to_matchpy(formula.right, enc))
     if isinstance(formula, Exists):
-        return EXISTS(Symbol(" ".join(v.name for v in formula.vars)), to_matchpy(formula.body, enc)) # type: ignore
+        return EXISTS(Symbol(" ".join(v.name for v in formula.vars)), to_matchpy(formula.body, enc))
     if isinstance(formula, Forall):
-        return FORALL(Symbol(" ".join(v.name for v in formula.vars)), to_matchpy(formula.body, enc)) # type: ignore
+        return FORALL(Symbol(" ".join(v.name for v in formula.vars)), to_matchpy(formula.body, enc))
     raise TypeError(f"Unsupported formula type: {type(formula).__name__}")
 
 
@@ -158,4 +160,5 @@ def lift_connectives(formula: Formula) -> Formula:
     enc = AtomEncoder()
     expr = to_matchpy(formula, enc)
     lifted = rewrite_fixed_point(expr)
-    return from_matchpy(lifted, enc)
+    candidate = from_matchpy(lifted, enc)
+    return candidate if is_better_lift(formula, candidate) else formula

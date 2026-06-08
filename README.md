@@ -260,68 +260,58 @@ Primary exports:
 from logic import lift_formula, to_string
 ```
 
-## Dependencies
+#### Scoring API
 
-Install at least:
+- `score_formula(formula) -> FormulaScore`
+- `score_delta(before, after) -> int`
+- `is_better_lift(before, after) -> bool`
+- `best_formula(candidates) -> Formula`
+- `lift_formula_with_scores(formula) -> LiftResult`
 
-```bash
-pip install nltk networkx penman pydot
-```
+`FormulaScore` includes structural metrics such as node count, negation count, implication count, quantifier count, max depth, abstraction score, penalty, and total score.
 
-If using graph visualization output, Graphviz may also be required:
+The scoring heuristic prefers formulas with:
 
-```bash
-sudo apt-get install graphviz
-```
+1. more abstract connectives, especially `→` and `↔`
+2. universal quantifier abstractions when they replace negated existentials
+3. fewer negations
+4. fewer disjunctions
+5. fewer total AST nodes
+6. shallower trees
 
-or the equivalent for your platform.
+#### Main rewrite families
 
-Depending on which lifting implementation is active, additional dependencies such as `matchpy` may be needed.
+- `¬¬P -> P`
+- `¬∃x.P -> ∀x.¬P`
+- `¬∀x.P -> ∃x.¬P`, accepted only when scoring prefers it
+- `¬∃x.(A1 ∧ ... ∧ ¬B) -> ∀x.((A1 ∧ ...) → B)`
+- `¬P ∨ Q -> P → Q`
+- `(P → Q) ∧ (Q → P) -> P ↔ Q`
 
-## Running from the Project Root
+Candidate rewrites are score-gated. A rewrite is kept only when `is_better_lift(before, after)` ranks the candidate higher than the prior formula for that pass.
 
-Run scripts from the repository root so that Python can resolve the `logic` package correctly.
-
-Example:
-
-```bash
-cd <project-parent-directory>/drs-to-fol
-python -c "import logic; print(logic)"
-```
-
-If import resolution fails, set `PYTHONPATH` explicitly:
-
-```bash
-PYTHONPATH=<project-parent-directory>/drs-to-fol \
-python -c "import logic; print(logic)"
-```
-
-For VS Code / Pylance, open the repository root rather than the `logic/` directory:
-
-```bash
-cd <project-parent-directory>/drs-to-fol
-code .
-```
-
-A `.vscode/settings.json` file may also help:
-
-```json
-{
-  "python.analysis.extraPaths": [
-    "${workspaceFolder}"
-  ]
-}
-```
 
 ## Usage
 
-## Convert PMB SBN JSON to DRS/FOL
+### Convert PMB SBN JSON to DRS/FOL
 
 The current `sbn_to_fol.py` workflow expects a JSON file shaped like:
-
 ```json
 [
   {
+    "raw": "...",
+    "sbn": "..."
+  }
+]
+```
+
+Expected output:
+```json
+[
+  {
+    "fol": "..."
+    "drs": "...",
+    "raw": "...",
     "sbn": "..."
   }
 ]
@@ -336,7 +326,7 @@ python sbn_to_fol.py \
 
 The script prints the source SBN, generated DRS, and generated FOL.
 
-## Convert one-line SBN
+### Convert one-line SBN
 
 If the input file contains one flattened SBN per line:
 
@@ -346,7 +336,7 @@ python sbn_to_fol.py \
   --single-line \
 ```
 
-## Example: Parsing and Lifting a Formula
+### Example: Parsing and Lifting a Formula
 
 ```python
 from logic import parse_fol, lift_formula, to_string
@@ -357,7 +347,7 @@ lifted = lift_formula(formula)
 print(to_string(lifted))
 ```
 
-## CLI Script for Batch Lifting
+### CLI Script for Batch Lifting
 
 A CLI utility can be used to read a JSON file containing FOL samples, lift each formula, and write a new JSON file with the lifted output.
 
@@ -365,8 +355,8 @@ Example usage:
 
 ```bash
 python fol_lift.py \
-  gold-fol.json \
-  gold-fol-lifted.json
+  --input gold-fol.json \
+  --output gold-fol-lifted.json
 ```
 
 With explicit `PYTHONPATH`:
@@ -374,8 +364,8 @@ With explicit `PYTHONPATH`:
 ```bash
 PYTHONPATH=<project-parent-directory>/drs-to-fol \
 python fol_lift.py \
-  gold-fol.json \
-  gold-fol-lifted.json
+  --input gold-fol.json \
+  --output gold-fol-lifted.json
 ```
 
 ## Input JSON Formats
@@ -387,24 +377,32 @@ The SBN converter expects a JSON list of objects.
 Each object should include:
 
 ```json
-{
-  "sbn": "time.n.08 EQU now\nman.n.01\nplay.v.07 Agent -1"
-}
+[
+  {
+    "fol": "exists e2 t3 x1 x4 x5.(entity_n_01(x1) & be_v_02(e2) & time_n_08(t3) & male_n_02(x4) & nickname_n_01(x5) & EQU(x1,EMPTY) & Co_Theme(e2,x1) & Time(e2,t3) & Theme(e2,x5) & EQU(t3,now) & Name(x4,Frank_Sinatra) & Bearer(x5,x4))",
+    "raw": "What is Frank Sinatra's nickname?\r\n",
+    "lifted": "∃e2 t3 x1 x4 x5.(entity_n_01(x1) ∧ be_v_02(e2) ∧ time_n_08(t3) ∧ male_n_02(x4) ∧ nickname_n_01(x5) ∧ EQU(x1,EMPTY) ∧ Co_Theme(e2,x1) ∧ Time(e2,t3) ∧ Theme(e2,x5) ∧ EQU(t3,now) ∧ Name(x4,Frank_Sinatra) ∧ Bearer(x5,x4))"
+  }
+]
 ```
 
 The `sbn` field is required for SBN-to-FOL conversion.
 
-## FOL lifting input
+## FOL lifting input (same as SBN conversion output)
 
 The batch lifting script expects a JSON list of objects.
 
 Each object should include at least:
 
 ```json
-{
-  "fol": "exists x. car(x)",
-  "raw": "optional original source text or metadata"
-}
+[
+  {
+    "drs": "DRS([x1,e2,t3,x4,x5],[entity_n_01(x1), be_v_02(e2), time_n_08(t3), male_n_02(x4), nickname_n_01(x5), EQU(x1,EMPTY), Co_Theme(e2,x1), Time(e2,t3), Theme(e2,x5), EQU(t3,now), Name(x4,Frank_Sinatra), Bearer(x5,x4)])",
+    "fol": "exists e2 t3 x1 x4 x5.(entity_n_01(x1) & be_v_02(e2) & time_n_08(t3) & male_n_02(x4) & nickname_n_01(x5) & EQU(x1,EMPTY) & Co_Theme(e2,x1) & Time(e2,t3) & Theme(e2,x5) & EQU(t3,now) & Name(x4,Frank_Sinatra) & Bearer(x5,x4))",
+    "sbn": "\n\nentity.n.01   EQU ?                        \nbe.v.02       Co-Theme -1 Time +1 Theme +3 \ntime.n.08     EQU now                      \nmale.n.02     Name \"Frank Sinatra\"         \nnickname.n.01 Bearer -1                    \n",
+    "raw": "What is Frank Sinatra's nickname?\r\n"
+  }
+]
 ```
 
 The `fol` field is required.
@@ -418,9 +416,9 @@ The generated lifting output is a JSON list of objects:
 ```json
 [
   {
-    "fol": "exists x. car(x)",
-    "raw": "optional original source text or metadata",
-    "lifted": "exists x. car(x)"
+    "fol": "exists e2 t3 x1 x4 x5.(entity_n_01(x1) & be_v_02(e2) & time_n_08(t3) & male_n_02(x4) & nickname_n_01(x5) & EQU(x1,EMPTY) & Co_Theme(e2,x1) & Time(e2,t3) & Theme(e2,x5) & EQU(t3,now) & Name(x4,Frank_Sinatra) & Bearer(x5,x4))",
+    "raw": "What is Frank Sinatra's nickname?\r\n",
+    "lifted": "∃e2 t3 x1 x4 x5.(entity_n_01(x1) ∧ be_v_02(e2) ∧ time_n_08(t3) ∧ male_n_02(x4) ∧ nickname_n_01(x5) ∧ EQU(x1,EMPTY) ∧ Co_Theme(e2,x1) ∧ Time(e2,t3) ∧ Theme(e2,x5) ∧ EQU(t3,now) ∧ Name(x4,Frank_Sinatra) ∧ Bearer(x5,x4))"
   }
 ]
 ```
