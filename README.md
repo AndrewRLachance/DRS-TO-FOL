@@ -892,5 +892,3 @@ Currently, some scripts print to stdout. Add JSON writers for:
 This repository contains code and documentation generated primarily with assistance from ChatGPT, specifically **GPT-5.5 Thinking**.
 
 The developer reviewed the generated outputs, but the results have not been independently validated by formal methods, third-party review, comprehensive automated testing, official PMB tooling comparison, or any other external correctness process.
-
-Use with caution.
