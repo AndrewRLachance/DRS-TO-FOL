@@ -23,8 +23,8 @@ The intent is to enable accurate, quick, [natural language understanding](https:
 
 ## Important Status Notice
 
->[!NOTE]
->This only applies to [SBN to FOL conversions](sbn_to_fol.py)
+> [!NOTE]
+> This only applies to [SBN to FOL conversions](sbn_to_fol.py)
 
 This project is experimental and intended only as a launching point for further experimental downstream tasks.
 
