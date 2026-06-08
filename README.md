@@ -894,3 +894,9 @@ Currently, some scripts print to stdout. Add JSON writers for:
 This repository contains code and documentation generated primarily with assistance from ChatGPT, specifically **GPT-5.5 Thinking**.
 
 The developer reviewed the generated outputs, but the results have not been independently validated by formal methods, third-party review, comprehensive automated testing, official PMB tooling comparison, or any other external correctness process.
+
+## Citation
+
+If you use this project, please cite:
+
+Lasha Abzianidze, Johannes Bjerva, Kilian Evang, Hessel Haagsma, Rik van Noord, Pierre Ludmann, Duc-Duy Nguyen, and Johan Bos. 2017. *The Parallel Meaning Bank: Towards a Multilingual Corpus of Translations Annotated with Compositional Meaning Representations*. In Proceedings of the 15th Conference of the European Chapter of the Association for Computational Linguistics (EACL), pages 242–247, Valencia, Spain.
