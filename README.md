@@ -52,12 +52,14 @@ drs-to-fol
 ├── logic
 │   ├── __init__.py
 │   ├── fol_ast.py
+│   ├── semantic_ir.py
 │   ├── lifting
 │   │   ├── __init__.py
 │   │   ├── lift.py
 │   │   ├── matchpy_lift.py
 │   │   ├── pretty.py
-│   │   └── quantifier_lift.py
+│   │   ├── quantifier_lift.py
+│   │   └── scoring.py
 │   └── parsing
 │       ├── __init__.py
 │       ├── drs.py
@@ -74,11 +76,14 @@ drs-to-fol
 │   ├── smatch.py
 │   ├── smatch_fromlists.py
 │   └── utils.py
+├── TODO.md
 ├── fol_lift.py
 └── sbn_to_fol.py
 ```
 
-Some paths may differ depending on local development state.
+The canonical sample data lives under `data/`. Root-level JSON files, when
+present, should be treated as local/generated working files unless documented
+otherwise.
 
 ## Package Overview
 
@@ -252,13 +257,37 @@ from logic import parse_fol, parse_fol_list_text, parse_fol_list_file
 
 ### `logic.lifting`
 
-Contains logic transformation utilities, including quantifier lifting and pretty-printing.
+Contains logic transformation utilities, including quantifier lifting, connective
+lifting, score-gated rewrite selection, and pretty-printing.
 
 Primary exports:
 
 ```python
-from logic import lift_formula, to_string
+from logic import (
+    LiftResult,
+    FormulaScore,
+    lift_formula,
+    lift_formula_with_scores,
+    score_formula,
+    score_delta,
+    is_better_lift,
+    best_formula,
+    to_string,
+)
 ```
+
+`lift_formula(formula) -> Formula` is the canonical lifting API for callers.
+It is orchestrated by `logic.lifting.lift`, which applies quantifier rewrites,
+MatchPy-backed connective rewrites, and scoring-based acceptance in one place.
+
+`lift_formula_with_scores(formula) -> LiftResult` is the public inspection API
+when callers need before/after score metadata.
+
+Direct imports from `logic.lifting.matchpy_lift` and
+`logic.lifting.quantifier_lift` are implementation-level and are not
+recommended for application callers. Those modules remain available as the
+internal connective and quantifier rewrite implementations behind
+`lift_formula`.
 
 #### Scoring API
 
@@ -309,8 +338,30 @@ Expected output:
 ```json
 [
   {
-    "fol": "..."
+    "fol": "...",
     "drs": "...",
+    "error": null,
+    "semantic": {
+      "ir": {
+        "boxes": [],
+        "referents": [],
+        "conditions": [],
+        "frames": [],
+        "diagnostics": []
+      },
+      "proposition_frames": [],
+      "modal_frames": [],
+      "discourse_frames": [],
+      "entity_frames": [],
+      "event_frames": [],
+      "time_frames": [],
+      "name_frames": [],
+      "quantity_frames": [],
+      "equality_frames": [],
+      "generalized_quantifier_frames": [],
+      "accessibility_frames": []
+    },
+    "diagnostics": [],
     "raw": "...",
     "sbn": "..."
   }
@@ -321,10 +372,12 @@ Example:
 
 ```bash
 python sbn_to_fol.py \
-  --input <project-parent-directory>/drs-to-fol/gold.json \
+  --input data/gold.json \
+  --output data/gold-fol.json
 ```
 
-The script prints the source SBN, generated DRS, and generated FOL.
+Without `--output`, the script prints JSON to stdout. Add `--pretty` for
+indented stdout JSON.
 
 ### Convert one-line SBN
 
@@ -355,8 +408,17 @@ Example usage:
 
 ```bash
 python fol_lift.py \
-  --input gold-fol.json \
-  --output gold-fol-lifted.json
+  --input data/gold-fol.json \
+  --output data/gold-fol-lifted.json
+```
+
+Use `--include-scores` to include score metadata in each output item:
+
+```bash
+python fol_lift.py \
+  --input data/gold-fol.json \
+  --output data/gold-fol-lifted.json \
+  --include-scores
 ```
 
 With explicit `PYTHONPATH`:
@@ -364,8 +426,8 @@ With explicit `PYTHONPATH`:
 ```bash
 PYTHONPATH=<project-parent-directory>/drs-to-fol \
 python fol_lift.py \
-  --input gold-fol.json \
-  --output gold-fol-lifted.json
+  --input data/gold-fol.json \
+  --output data/gold-fol-lifted.json
 ```
 
 ## Input JSON Formats
@@ -379,9 +441,8 @@ Each object should include:
 ```json
 [
   {
-    "fol": "exists e2 t3 x1 x4 x5.(entity_n_01(x1) & be_v_02(e2) & time_n_08(t3) & male_n_02(x4) & nickname_n_01(x5) & EQU(x1,EMPTY) & Co_Theme(e2,x1) & Time(e2,t3) & Theme(e2,x5) & EQU(t3,now) & Name(x4,Frank_Sinatra) & Bearer(x5,x4))",
     "raw": "What is Frank Sinatra's nickname?\r\n",
-    "lifted": "∃e2 t3 x1 x4 x5.(entity_n_01(x1) ∧ be_v_02(e2) ∧ time_n_08(t3) ∧ male_n_02(x4) ∧ nickname_n_01(x5) ∧ EQU(x1,EMPTY) ∧ Co_Theme(e2,x1) ∧ Time(e2,t3) ∧ Theme(e2,x5) ∧ EQU(t3,now) ∧ Name(x4,Frank_Sinatra) ∧ Bearer(x5,x4))"
+    "sbn": "\n\nentity.n.01   EQU ?                        \nbe.v.02       Co-Theme -1 Time +1 Theme +3 \ntime.n.08     EQU now                      \nmale.n.02     Name \"Frank Sinatra\"         \nnickname.n.01 Bearer -1                    \n"
   }
 ]
 ```
@@ -423,7 +484,68 @@ The generated lifting output is a JSON list of objects:
 ]
 ```
 
-SBN-to-FOL output is currently printed to stdout unless separately wrapped in a batch writer.
+When `fol_lift.py --include-scores` is used, each item also includes:
+
+```json
+{
+  "score": {
+    "total": -11,
+    "abstraction": 4,
+    "penalty": 15,
+    "node_count": 6
+  },
+  "lifted_score": {
+    "total": 24,
+    "abstraction": 24,
+    "penalty": 0,
+    "node_count": 4
+  },
+  "score_delta": 35,
+  "improved": true
+}
+```
+
+The score objects contain all `FormulaScore` dataclass fields; the shortened
+example above shows only the most commonly inspected fields.
+
+SBN-to-FOL output can be written directly with `--output`; otherwise it is
+printed to stdout as compact JSON or as indented JSON with `--pretty`.
+
+Each SBN-to-FOL output item includes `diagnostics`, a list of structured
+warnings or notes for skipped scope-marker edges, unknown roles/operators,
+malformed graph fallback edges, unsupported scopal structures, and conservative
+semantic fallbacks.
+
+Output also includes a `semantic` object backed by the neutral dataclasses in
+`logic.semantic_ir`. At present this models:
+
+* box/referent/condition structure under `semantic.ir`
+* entity, event, time, name, quantity, equality, generalized-quantifier, and
+  accessibility frames
+* `Proposition <N` scope-marker relations as proposition frames.
+* `POSSIBILITY` and `NECESSITY` as modal frames.
+* discourse relations such as `ATTRIBUTION`, `COMMENTARY`, `CONTINUATION`,
+  `CONTRAST`, `ELABORATION`, `EXPLANATION`, `RESULT`, and `SOURCE` as
+  discourse frames.
+
+These semantic frames are not lowered into FOL. They preserve scoped structure
+for downstream consumers while keeping FOL output conservative.
+
+### Semantic IR Review
+
+| Area | Current semantic IR behavior | FOL behavior |
+| --- | --- | --- |
+| Temporal relations | Models `time.n.*`, temporal roles such as `Time`, and temporal operators such as `EQU`, `TPR`, `TAB`, and `TIN` when a time referent is involved. | Existing DRS/FOL rendering is preserved. |
+| Equality | Models `EQU`, `EQ`, `=`, and `Equal` as equality frames. | Existing equality lowering is preserved where already supported. |
+| Quantity and numeric values | Models `Quantity`, `Measure`, `Unit`, `Value`, numeric constants, `?`, `+`, and `-` as quantity frames. | No numeric ordering is inferred beyond explicit operators. |
+| Generalized quantification | Emits uncertain generalized-quantifier frames and diagnostics for ambiguous quantity markers such as `?`, `+`, and `-`. | Existing existential DRS behavior is preserved. |
+| DRS accessibility | Models box parent/child accessibility with local and inherited referent lists. | Existing scoping/FOL behavior is preserved. |
+
+## Tracked TODO Backlog
+
+See [TODO.md](TODO.md) for a maintained backlog of documentation, validation,
+diagnostics, semantic-modeling, and lifting-architecture follow-up work derived
+from this README review.
 
 ## SBN / DRS Interpretation Notes
 
@@ -753,7 +875,10 @@ POSSIBILITY
 NECESSITY
 ```
 
-The current converter preserves the embedded content but does not faithfully encode modality.
+The current converter preserves the embedded content but does not faithfully encode modality in FOL.
+
+Modal scopes are modeled in the SBN-to-FOL JSON output under `semantic.modal_frames`.
+Each frame records the modal operator, source and target boxes, rendered target DRS, and the fact that modality was not lowered into FOL.
 
 ### Discourse relations are mostly structural
 
@@ -766,13 +891,18 @@ COMMENTARY
 ELABORATION
 ```
 
-are not given full logical semantics.
+are not given full logical semantics in FOL.
+
+They are modeled in the SBN-to-FOL JSON output under `semantic.discourse_frames`.
+Each frame records the discourse relation, source and target boxes, rendered target DRS, and whether the current FOL exporter merged the content structurally or preserved it as embedded DRS content.
 
 ### `Proposition <N` is not fully interpreted
 
-Currently, scope-marker proposition edges are skipped to avoid producing invalid or misleading binary FOL predicates.
+Currently, scope-marker proposition edges are not lowered into FOL to avoid producing invalid or misleading binary predicates.
 
-A more faithful version would represent proposition-taking predicates with embedded DRS arguments or a higher-order/semantic-frame representation.
+They are modeled in the SBN-to-FOL JSON output under `semantic.proposition_frames`.
+
+A future FOL lowering could reify proposition objects or use another formalism for embedded DRS arguments.
 
 ### Generated FOL may be approximate
 
@@ -814,6 +944,8 @@ tests/
 
 ## Recommended Next Steps
 
+The tracked version of this backlog lives in [TODO.md](TODO.md).
+
 ### 1. Add regression tests
 
 Create a small test set of SBN snippets covering:
@@ -844,20 +976,19 @@ Track:
 * constants that look like indices
 * unsupported scopal structures
 
-### 3. Add a neutral intermediate representation
+### 3. Continue evolving the neutral intermediate representation
 
-A better long-term architecture is:
+The current architecture now includes a semantic IR layer:
 
 ```text
 SBNGraph
-→ DRSBox IR
-→ Formula IR
+→ SemanticDocument IR
 → NLTK / Z3 / PySMT / TPTP / JSON
 ```
 
-This avoids making NLTK the central semantic representation.
+Keep expanding this layer so NLTK is not the central semantic representation.
 
-### 4. Build semantic abstraction layers
+### 4. Extend semantic abstraction layers
 
 Useful abstractions include:
 

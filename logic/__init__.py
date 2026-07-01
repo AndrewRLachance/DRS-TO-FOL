@@ -11,10 +11,40 @@ from .fol_ast import (
     Var,
 )
 from .parsing import parse_fol, parse_fol_list_file, parse_fol_list_text
-from .lifting import lift_formula, to_string
+from .lifting import (
+    FormulaScore,
+    LiftResult,
+    best_formula,
+    is_better_lift,
+    lift_formula,
+    lift_formula_with_scores,
+    score_delta,
+    score_formula,
+    to_string,
+)
+from .semantic_ir import (
+    AccessibilityFrame,
+    EntityFrame,
+    EqualityFrame,
+    EventFrame,
+    NameFrame,
+    QuantityFrame,
+    SemanticBox,
+    SemanticCondition,
+    SemanticDocument,
+    SemanticReferent,
+    TimeFrame,
+)
 
 __all__ = [
     "lift_formula",
+    "lift_formula_with_scores",
+    "LiftResult",
+    "FormulaScore",
+    "score_formula",
+    "score_delta",
+    "is_better_lift",
+    "best_formula",
     "to_string",
     "parse_fol",
     "parse_fol_list_text",
@@ -29,4 +59,15 @@ __all__ = [
     "Implication",
     "Negation",
     "Var",
+    "AccessibilityFrame",
+    "EntityFrame",
+    "EqualityFrame",
+    "EventFrame",
+    "NameFrame",
+    "QuantityFrame",
+    "SemanticBox",
+    "SemanticCondition",
+    "SemanticDocument",
+    "SemanticReferent",
+    "TimeFrame",
 ]

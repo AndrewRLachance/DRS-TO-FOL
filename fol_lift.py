@@ -2,12 +2,19 @@
 
 import argparse
 import json
+from dataclasses import asdict
 from pathlib import Path
 
-from logic import lift_formula, parse_fol, to_string
+from logic import lift_formula, lift_formula_with_scores, parse_fol, to_string
 
 
-def lift_fol_file(input_path: Path, output_path: Path, indent: int = 4) -> None:
+def lift_fol_file(
+    input_path: Path,
+    output_path: Path,
+    indent: int = 4,
+    *,
+    include_scores: bool = False,
+) -> None:
     with input_path.open("r", encoding="utf-8") as f:
         samples = json.load(f)
 
@@ -18,15 +25,27 @@ def lift_fol_file(input_path: Path, output_path: Path, indent: int = 4) -> None:
             raise KeyError(f"Sample at index {i} is missing required key: 'fol'")
 
         formula = parse_fol(src["fol"])
-        lifted = lift_formula(formula)
 
-        data.append(
-            {
+        if include_scores:
+            result = lift_formula_with_scores(formula)
+            item = {
+                "fol": src["fol"],
+                "raw": src.get("raw"),
+                "lifted": to_string(result.lifted),
+                "score": asdict(result.original_score),
+                "lifted_score": asdict(result.lifted_score),
+                "score_delta": result.delta,
+                "improved": result.improved,
+            }
+        else:
+            lifted = lift_formula(formula)
+            item = {
                 "fol": src["fol"],
                 "raw": src.get("raw"),
                 "lifted": to_string(lifted),
             }
-        )
+
+        data.append(item)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -58,12 +77,23 @@ def parse_args() -> argparse.Namespace:
         help="JSON indentation level. Default: 4",
     )
 
+    parser.add_argument(
+        "--include-scores",
+        action="store_true",
+        help="Include original/lifted score metadata in each output item.",
+    )
+
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    lift_fol_file(args.input, args.output, args.indent)
+    lift_fol_file(
+        args.input,
+        args.output,
+        args.indent,
+        include_scores=args.include_scores,
+    )
 
 
 if __name__ == "__main__":
